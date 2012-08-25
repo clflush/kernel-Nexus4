@@ -634,8 +634,9 @@ static void ksb_usb_disconnect(struct usb_interface *ifc)
 	wake_up(&ksb->ks_wait_q);
 	cancel_work_sync(&ksb->to_mdm_work);
 
-	usb_kill_anchored_urbs(&ksb->submitted);
+	misc_deregister(ksb->fs_dev);
 
+	usb_kill_anchored_urbs(&ksb->submitted);
 	spin_lock_irqsave(&ksb->lock, flags);
 	while (!list_empty(&ksb->to_ks_list)) {
 		pkt = list_first_entry(&ksb->to_ks_list,
