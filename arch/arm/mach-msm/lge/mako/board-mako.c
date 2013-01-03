@@ -1047,7 +1047,7 @@ static const u8 mxt1386e_config_data_v2_1[] = {
 	/* T6 Object */
 	0, 0, 0, 0, 0, 0,
 	/* T38 Object */
-	14, 2, 0, 24, 5, 12, 0, 0, 0, 0,
+	14, 4, 0, 5, 11, 12, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -1055,12 +1055,12 @@ static const u8 mxt1386e_config_data_v2_1[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0,
 	/* T7 Object */
-	100, 10, 50,
+	32, 8, 50,
 	/* T8 Object */
 	25, 0, 20, 20, 0, 0, 0, 0, 0, 0,
 	/* T9 Object */
 	139, 0, 0, 26, 42, 0, 32, 80, 2, 5,
-	0, 5, 5, 0, 10, 30, 10, 10, 255, 2,
+	0, 5, 5, 79, 10, 30, 10, 10, 255, 2,
 	85, 5, 0, 5, 9, 5, 12, 35, 70, 40,
 	20, 5, 0, 0, 0,
 	/* T18 Object */
@@ -1195,6 +1195,27 @@ static struct msm_bus_vectors qseecom_enable_sfpb_vectors[] = {
 	},
 };
 
+static struct msm_bus_vectors qseecom_enable_dfab_sfpb_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_ADM_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab = 70000000UL,
+		.ib = 70000000UL,
+	},
+	{
+		.src = MSM_BUS_MASTER_ADM_PORT1,
+		.dst = MSM_BUS_SLAVE_GSBI1_UART,
+		.ab = 2480000000UL,
+		.ib = 2480000000UL,
+	},
+	{
+		.src = MSM_BUS_MASTER_SPDM,
+		.dst = MSM_BUS_SLAVE_SPDM,
+		.ib = (64 * 8) * 1000000UL,
+		.ab = (64 * 8) *  100000UL,
+	},
+};
+
 static struct msm_bus_paths qseecom_hw_bus_scale_usecases[] = {
 	{
 		ARRAY_SIZE(qseecom_clks_init_vectors),
@@ -1207,6 +1228,10 @@ static struct msm_bus_paths qseecom_hw_bus_scale_usecases[] = {
 	{
 		ARRAY_SIZE(qseecom_enable_sfpb_vectors),
 		qseecom_enable_sfpb_vectors,
+	},
+	{
+		ARRAY_SIZE(qseecom_enable_dfab_sfpb_vectors),
+		qseecom_enable_dfab_sfpb_vectors,
 	},
 };
 
@@ -1448,6 +1473,13 @@ static struct msm_rpmrs_level msm_rpmrs_levels[] = {
 	},
 
  	{
+		MSM_PM_SLEEP_MODE_RETENTION,
+		MSM_RPMRS_LIMITS(ON, ACTIVE, MAX, ACTIVE),
+		true,
+		415, 715, 340827, 475,
+	},
+
+	{
 		MSM_PM_SLEEP_MODE_RETENTION,
 		MSM_RPMRS_LIMITS(ON, ACTIVE, MAX, ACTIVE),
 		true,
