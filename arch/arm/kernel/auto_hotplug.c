@@ -1,5 +1,11 @@
+<<<<<<< HEAD
 /* Copyright (c) 2012, Will Tisdale <willtisdale@gmail.com>. All rights reserved.
  * Copyright (c) 2013 enhanced by motley <motley.slate@gmail.com>
+=======
+/* Copyright (c) 2012-2013, All rights reserved.
+ *
+ * Modified for Mako and Grouper, Francisco Franco <franciscofranco.1990@gmail.com>. All rights reserved.
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -40,6 +46,7 @@
 #include <linux/earlysuspend.h>
 #endif
 
+<<<<<<< HEAD
 #define CPUS_AVAILABLE		num_possible_cpus()
 
 /*
@@ -89,12 +96,35 @@ static unsigned int live_sampling_periods = DEFAULT_SAMPLING_PERIODS;
 static unsigned int index_max_value  = (DEFAULT_SAMPLING_PERIODS - 1);
 static unsigned int min_online_cpus = 1;
 static unsigned int max_online_cpus;
+=======
+static unsigned int enable_all_load_threshold __read_mostly = 400;
+static unsigned int enable_load_threshold __read_mostly = 250;
+static unsigned int disable_load_threshold __read_mostly = 100;
+static bool quad_core_mode __read_mostly = false;
+static bool hotplug_routines __read_mostly = true;
+static unsigned int sampling_rate __read_mostly = 10;
+static unsigned int sampling_timer __read_mostly = 30;
+
+module_param(enable_all_load_threshold, int, 0775);
+module_param(enable_load_threshold, int, 0775);
+module_param(disable_load_threshold, int, 0775);
+module_param(quad_core_mode, bool, 0755);
+module_param(hotplug_routines, bool, 0755);
+module_param(sampling_rate, int, 0755);
+module_param(sampling_timer, int, 0755);
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 
 struct delayed_work hotplug_decision_work;
 struct delayed_work hotplug_unpause_work;
 struct work_struct hotplug_online_all_work;
 struct work_struct hotplug_online_single_work;
 struct delayed_work hotplug_offline_work;
+<<<<<<< HEAD
+=======
+//struct work_struct hotplug_boost_online_work;
+struct work_struct no_hotplug_online_all_work;
+struct work_struct hotplug_online_all_work;
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 struct work_struct hotplug_offline_all_work;
 struct work_struct hotplug_boost_online_work;
 
@@ -286,6 +316,7 @@ MODULE_PARM_DESC(min_sampling_rate, "auto_hotplug minimum sampling rate (10-50ms
 module_param_cb(debug, &module_ops_debug, &debug, 0775);
 MODULE_PARM_DESC(enabled, "auto_hotplug debug to kernel log (Y/N)");
 
+<<<<<<< HEAD
 module_param_cb(sampling_periods, &module_ops_sampling_periods, &sampling_periods, 0775);
 MODULE_PARM_DESC(sampling_periods, "auto_hotplug history sampling periods (5-50)");
 
@@ -295,6 +326,8 @@ MODULE_PARM_DESC(min_online_cpus, "auto_hotplug min_online_cpus (1-#CPUs)");
 module_param_cb(max_online_cpus, &max_online_cpus_ops, &max_online_cpus, 0775);
 MODULE_PARM_DESC(max_online_cpus, "auto_hotplug max_online_cpus (1-#CPUs)");
 
+=======
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 static void hotplug_decision_work_fn(struct work_struct *work)
 {
 	unsigned int running, disable_load, enable_load, avg_running = 0;
@@ -306,6 +339,7 @@ static void hotplug_decision_work_fn(struct work_struct *work)
 
 	min_sampling_rate_in_jiffies = msecs_to_jiffies(min_sampling_rate);
 	online_cpus = num_online_cpus();
+<<<<<<< HEAD
 	available_cpus = CPUS_AVAILABLE;
 	disable_load = disable_load_threshold * online_cpus;
 	enable_load = enable_load_threshold * online_cpus;
@@ -408,9 +442,62 @@ static void hotplug_decision_work_fn(struct work_struct *work)
 				if (debug)
 					pr_info("auto_hotplug: Clearing boostpulse flags\n");
 			}
+=======
+	available_cpus = num_possible_cpus();
+	disable_load = disable_load_threshold * online_cpus;
+	enable_load = enable_load_threshold * online_cpus;
+
+	/* 
+	 * This is a custom function from Codeaurora to calculate the average of the runnable threads
+	 * and it doesn't seem to be very expensive so its worth a try. sched_get_nr_running_avg running 
+	 * on this kernel is modified from original code, the iowait calculations were removed because 
+	 * for the purpose of this driver we don't use that value and may cause extra overhead. 
+	 *
+	 * This function call has a 0ms to 1ms cost, roughly 200k nanoseconds - measured with ktime_get()
+	 */
+
+	sched_get_nr_running_avg(&avg_running);
+	
+	if ((avg_running > enable_all_load_threshold) && (online_cpus < available_cpus)) {
+		
+		if (work_pending(&hotplug_offline_all_work))
+			cancel_work_sync(&hotplug_offline_all_work);
+
+		schedule_work(&hotplug_online_all_work);
+
+		count = 0;
+		
+		return;
+	} else if ((avg_running >= enable_load) && (online_cpus < available_cpus)) {
+
+		if (work_pending(&hotplug_offline_all_work))
+			cancel_work_sync(&hotplug_offline_all_work);
+
+		schedule_work(&hotplug_online_single_work);
+		
+		count = 0;
+		
+		return;
+	} else if ((avg_running < disable_load) && (online_cpus > 2)) {
+		//if (boostpulse_active) {
+		//	boostpulse_active = false;
+		//} else if (online_cpus > 2) {
+			
+		/* 
+		 * This count serves to filter any spurious lower load as we don't want the driver
+		 * to offline a core during a intense task if for some reason it reports a low
+		 * load in one sample time. This can be called a sampling rate.
+		 */ 
+		if (count++ == sampling_rate) {
+			schedule_work(&hotplug_offline_all_work);
+			
+			count = 0;
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 		}
+		//}
 	}
 
+<<<<<<< HEAD
 	/*
 	 * Reduce the sampling rate dynamically based on online cpus.
 	 */
@@ -420,11 +507,32 @@ static void hotplug_decision_work_fn(struct work_struct *work)
 
 	schedule_delayed_work_on(0, &hotplug_decision_work, sampling_rate);
 
+=======
+	schedule_delayed_work(&hotplug_decision_work, msecs_to_jiffies(sampling_timer));
+}
+
+/*
+ * This function is only called on late_resume if the hotplug_routines flag is false
+ */
+static void __cpuinit no_hotplug_online_all_work_fn(struct work_struct *work)
+{
+	int cpu;
+
+	for_each_possible_cpu(cpu) {
+		if (cpu) {
+			if (!cpu_online(cpu))
+				cpu_up(cpu);
+			if (!quad_core_mode)
+				break;
+		}
+	}
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 }
 
 static void __cpuinit hotplug_online_all_work_fn(struct work_struct *work)
 {
 	int cpu;
+<<<<<<< HEAD
 	for_each_possible_cpu(cpu) {
 		if (likely(!cpu_online(cpu))) {
 			cpu_up(cpu);
@@ -437,6 +545,17 @@ static void __cpuinit hotplug_online_all_work_fn(struct work_struct *work)
 	 */
 	schedule_delayed_work(&hotplug_unpause_work, HZ * 2);
 	schedule_delayed_work_on(0, &hotplug_decision_work, min_sampling_rate);
+=======
+
+	for_each_possible_cpu(cpu) {
+		if (cpu) {
+			if (!cpu_online(cpu))
+				cpu_up(cpu);
+		}
+	}
+
+	schedule_delayed_work(&hotplug_decision_work, msecs_to_jiffies(sampling_timer));
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 }
 
 static void hotplug_offline_all_work_fn(struct work_struct *work)
@@ -445,8 +564,11 @@ static void hotplug_offline_all_work_fn(struct work_struct *work)
 	for_each_possible_cpu(cpu) {
 		if (likely(cpu_online(cpu) && (cpu))) {
 			cpu_down(cpu);
+<<<<<<< HEAD
 			if (debug)
 				pr_info("auto_hotplug: CPU%d down.\n", cpu);
+=======
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 		}
 	}
 }
@@ -459,13 +581,20 @@ static void __cpuinit hotplug_online_single_work_fn(struct work_struct *work)
 		if (cpu) {
 			if (!cpu_online(cpu)) {
 				cpu_up(cpu);
+<<<<<<< HEAD
 				if (debug)
 					pr_info("auto_hotplug: CPU%d up.\n", cpu);
+=======
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 				break;
 			}
 		}
 	}
+<<<<<<< HEAD
 	schedule_delayed_work_on(0, &hotplug_decision_work, min_sampling_rate);
+=======
+	schedule_delayed_work(&hotplug_decision_work, msecs_to_jiffies(sampling_timer));
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 }
 
 static void hotplug_offline_work_fn(struct work_struct *work)
@@ -546,6 +675,7 @@ void hotplug_boostpulse(void)
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void auto_hotplug_early_suspend(struct early_suspend *handler)
+<<<<<<< HEAD
 {
 	if (debug)
 		pr_info("auto_hotplug: early suspend handler\n");
@@ -576,6 +706,26 @@ static void auto_hotplug_late_resume(struct early_suspend *handler)
 	}
 
 	schedule_delayed_work_on(0, &hotplug_decision_work, HZ/2);
+=======
+{	
+	if (hotplug_routines) {
+		cancel_work_sync(&hotplug_offline_all_work);
+    	cancel_delayed_work_sync(&hotplug_decision_work);
+	}
+	
+    if (num_online_cpus() > 1) {
+    	pr_info("auto_hotplug: Offlining CPUs for early suspend\n");
+        schedule_work(&hotplug_offline_all_work);
+	}
+}
+
+static void __cpuinit auto_hotplug_late_resume(struct early_suspend *handler)
+{	
+	if (hotplug_routines)
+		schedule_delayed_work(&hotplug_decision_work, msecs_to_jiffies(sampling_timer));
+	else
+		schedule_work(&no_hotplug_online_all_work);
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 }
 
 static struct early_suspend auto_hotplug_suspend = {
@@ -586,6 +736,7 @@ static struct early_suspend auto_hotplug_suspend = {
 
 int __init auto_hotplug_init(void)
 {
+<<<<<<< HEAD
 	pr_info("auto_hotplug: v0.220 by _thalamus\n");
 	pr_info("auto_hotplug: rev 4 enhanced by motley\n");
 	pr_info("auto_hotplug: %d CPUs detected\n", CPUS_AVAILABLE);
@@ -599,6 +750,14 @@ int __init auto_hotplug_init(void)
 
 	INIT_DELAYED_WORK(&hotplug_decision_work, hotplug_decision_work_fn);
 	INIT_DELAYED_WORK_DEFERRABLE(&hotplug_unpause_work, hotplug_unpause_work_fn);
+=======
+	pr_info("auto_hotplug: v1.0\n");
+	pr_info("Modified by: Francisco Franco\n");
+	pr_info("auto_hotplug: %d CPUs detected\n", num_possible_cpus());
+
+	INIT_DELAYED_WORK(&hotplug_decision_work, hotplug_decision_work_fn);
+	INIT_WORK(&no_hotplug_online_all_work, no_hotplug_online_all_work_fn);
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 	INIT_WORK(&hotplug_online_all_work, hotplug_online_all_work_fn);
 	INIT_WORK(&hotplug_online_single_work, hotplug_online_single_work_fn);
 	INIT_WORK(&hotplug_offline_all_work, hotplug_offline_all_work_fn);
@@ -607,9 +766,14 @@ int __init auto_hotplug_init(void)
 	/*
 	 * Give the system time to boot before fiddling with hotplugging.
 	 */
+<<<<<<< HEAD
 	flags |= HOTPLUG_PAUSED;
 	schedule_delayed_work_on(0, &hotplug_decision_work, HZ * 5);
 	schedule_delayed_work(&hotplug_unpause_work, HZ * 10);
+=======
+	if (hotplug_routines)
+		schedule_delayed_work(&hotplug_decision_work, HZ*20);
+>>>>>>> c36da3f... auto_hotplug.c: general cleanup of the driver. Less clutter and less bullshit. Removed _thalamus as the author and copyright by his request.
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	register_early_suspend(&auto_hotplug_suspend);
