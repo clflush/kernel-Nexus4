@@ -63,8 +63,8 @@
  * These two are scaled based on num_online_cpus()
  */
 #define DEFAULT_ENABLE_ALL_LOAD_THRESHOLD	(100 * CPUS_AVAILABLE)
-#define DEFAULT_ENABLE_LOAD_THRESHOLD		250
-#define DEFAULT_DISABLE_LOAD_THRESHOLD		90
+#define DEFAULT_ENABLE_LOAD_THRESHOLD		230
+#define DEFAULT_DISABLE_LOAD_THRESHOLD		80
 
 /* Control flags */
 unsigned char flags;
