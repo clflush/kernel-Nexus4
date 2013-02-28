@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, Will Tisdale <willtisdale@gmail.com>. All rights reserved.
+/* Copyright (c) 2012, All rights reserved.
  * Copyright (c) 2013 enhanced by motley <motley.slate@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
@@ -63,8 +63,8 @@
  * These two are scaled based on num_online_cpus()
  */
 #define DEFAULT_ENABLE_ALL_LOAD_THRESHOLD	(100 * CPUS_AVAILABLE)
-#define DEFAULT_ENABLE_LOAD_THRESHOLD		200
-#define DEFAULT_DISABLE_LOAD_THRESHOLD		80
+#define DEFAULT_ENABLE_LOAD_THRESHOLD		220
+#define DEFAULT_DISABLE_LOAD_THRESHOLD		90
 
 /* Control flags */
 unsigned char flags;
