@@ -46,7 +46,7 @@
  * SAMPLING_PERIODS * MIN_SAMPLING_RATE is the minimum
  * load history which will be averaged
  */
-#define DEFAULT_SAMPLING_PERIODS	10
+#define DEFAULT_SAMPLING_PERIODS	15
 
 /*
  * DEFAULT_MIN_SAMPLING_RATE is the base minimum sampling rate
