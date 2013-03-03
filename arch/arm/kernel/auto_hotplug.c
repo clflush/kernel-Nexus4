@@ -46,7 +46,7 @@
  * SAMPLING_PERIODS * MIN_SAMPLING_RATE is the minimum
  * load history which will be averaged
  */
-#define DEFAULT_SAMPLING_PERIODS	10
+#define DEFAULT_SAMPLING_PERIODS	15
 
 /*
  * DEFAULT_MIN_SAMPLING_RATE is the base minimum sampling rate
@@ -62,9 +62,9 @@
  * DEFAULT_DISABLE_LOAD_THRESHOLD is the default load at which a CPU is disabled
  * These two are scaled based on num_online_cpus()
  */
-#define DEFAULT_ENABLE_ALL_LOAD_THRESHOLD	(105 * CPUS_AVAILABLE)
+#define DEFAULT_ENABLE_ALL_LOAD_THRESHOLD	(100 * CPUS_AVAILABLE)
 #define DEFAULT_ENABLE_LOAD_THRESHOLD		250
-#define DEFAULT_DISABLE_LOAD_THRESHOLD		95
+#define DEFAULT_DISABLE_LOAD_THRESHOLD		90
 
 /* Control flags */
 unsigned char flags;
@@ -414,7 +414,7 @@ static void hotplug_decision_work_fn(struct work_struct *work)
 	/*
 	 * Reduce the sampling rate dynamically based on online cpus.
 	 */
-	sampling_rate = min_sampling_rate_in_jiffies * online_cpus ;
+	sampling_rate = min_sampling_rate_in_jiffies * (online_cpus * online_cpus);
 	if (debug)
 		pr_info("sampling_rate is: %d\n", jiffies_to_msecs(sampling_rate));
 
@@ -435,7 +435,7 @@ static void __cpuinit hotplug_online_all_work_fn(struct work_struct *work)
 	/*
 	 * Pause for 2 seconds before even considering offlining a CPU
 	 */
-	schedule_delayed_work(&hotplug_unpause_work, HZ );
+	schedule_delayed_work(&hotplug_unpause_work, HZ * 2);
 	schedule_delayed_work_on(0, &hotplug_decision_work, min_sampling_rate);
 }
 
