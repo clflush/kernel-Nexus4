@@ -46,7 +46,7 @@
  * SAMPLING_PERIODS * MIN_SAMPLING_RATE is the minimum
  * load history which will be averaged
  */
-#define DEFAULT_SAMPLING_PERIODS	15
+#define DEFAULT_SAMPLING_PERIODS	10
 
 /*
  * DEFAULT_MIN_SAMPLING_RATE is the base minimum sampling rate
@@ -63,8 +63,8 @@
  * These two are scaled based on num_online_cpus()
  */
 #define DEFAULT_ENABLE_ALL_LOAD_THRESHOLD	(100 * CPUS_AVAILABLE)
-#define DEFAULT_ENABLE_LOAD_THRESHOLD		250
-#define DEFAULT_DISABLE_LOAD_THRESHOLD		90
+#define DEFAULT_ENABLE_LOAD_THRESHOLD		230
+#define DEFAULT_DISABLE_LOAD_THRESHOLD		95
 
 /* Control flags */
 unsigned char flags;
@@ -435,7 +435,7 @@ static void __cpuinit hotplug_online_all_work_fn(struct work_struct *work)
 	/*
 	 * Pause for 2 seconds before even considering offlining a CPU
 	 */
-	schedule_delayed_work(&hotplug_unpause_work, HZ * 2);
+	schedule_delayed_work(&hotplug_unpause_work, HZ );
 	schedule_delayed_work_on(0, &hotplug_decision_work, min_sampling_rate);
 }
 
