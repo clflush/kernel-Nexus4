@@ -77,9 +77,36 @@ struct clk_notifier_data {
 	unsigned long		new_rate;
 };
 
+/**
+ * struct dvfs_info_init - data needs to initialize struct dvfs_info
+ * @dev:	device related to this frequency-voltage pair
+ * @con_id:	string name of clock connection
+ * @reg_id:	string name of regulator
+ * @tol:	voltage tolerance for this device
+ *
+ * Provides the data needed to register a common dvfs sequence in a clk
+ * notifier handler.  The clk and regulator lookups are stored in a
+ * private struct and the notifier handler is registered with the clk
+ * framework with a call to dvfs_clk_notifier_register.
+ *
+ * FIXME stuffing @tol here is a hack.  It belongs in the opp table.
+ * Maybe clk & regulator will also live in the opp table some day.
+ */
+struct dvfs_info_init {
+	struct device *dev;
+	const char *con_id;
+	const char *reg_id;
+	int tol;
+};
+
+struct dvfs_info;
+ 
 int clk_notifier_register(struct clk *clk, struct notifier_block *nb);
 
 int clk_notifier_unregister(struct clk *clk, struct notifier_block *nb);
+
+struct dvfs_info *dvfs_clk_notifier_register(struct dvfs_info_init *dii);
+void dvfs_clk_notifier_unregister(struct dvfs_info *di);
 
 #endif /* !CONFIG_COMMON_CLK */
 

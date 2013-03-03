@@ -16,9 +16,11 @@
 #include <linux/err.h>
 #include <linux/list.h>
 #include <linux/slab.h>
+#include <linux/sched.h>
 
 static DEFINE_SPINLOCK(enable_lock);
 static DEFINE_MUTEX(prepare_lock);
+static atomic_t context;
 
 static HLIST_HEAD(clk_root_list);
 static HLIST_HEAD(clk_orphan_list);
@@ -282,27 +284,6 @@ inline int __clk_get_prepare_count(struct clk *clk)
 	return !clk ? -EINVAL : clk->prepare_count;
 }
 
-unsigned long __clk_get_rate(struct clk *clk)
-{
-	unsigned long ret;
-
-	if (!clk) {
-		ret = -EINVAL;
-		goto out;
-	}
-
-	ret = clk->rate;
-
-	if (clk->flags & CLK_IS_ROOT)
-		goto out;
-
-	if (!clk->parent)
-		ret = -ENODEV;
-
-out:
-	return ret;
-}
-
 inline unsigned long __clk_get_flags(struct clk *clk)
 {
 	return !clk ? -EINVAL : clk->flags;
@@ -373,6 +354,35 @@ struct clk *__clk_lookup(const char *name)
 	return NULL;
 }
 
+/***  locking & reentrancy ***/
+
+static void clk_fwk_lock(void)
+{
+	/* hold the framework-wide lock, context == NULL */
+	mutex_lock(&prepare_lock);
+
+	/* set context for any reentrant calls */
+	atomic_set(&context, (int) get_current());
+}
+
+static void clk_fwk_unlock(void)
+{
+	/* clear the context */
+	atomic_set(&context, 0);
+
+	/* release the framework-wide lock, context == NULL */
+	mutex_unlock(&prepare_lock);
+}
+
+static bool clk_is_reentrant(void)
+{
+	if (mutex_is_locked(&prepare_lock))
+		if ((void *) atomic_read(&context) == get_current())
+			return true;
+
+	return false;
+}
+
 /***        clk api        ***/
 
 void __clk_unprepare(struct clk *clk)
@@ -407,9 +417,15 @@ void __clk_unprepare(struct clk *clk)
  */
 void clk_unprepare(struct clk *clk)
 {
-	mutex_lock(&prepare_lock);
+	/* re-enter if call is from the same context */
+	if (clk_is_reentrant()) {
+		__clk_unprepare(clk);
+		return;
+	}
+
+	clk_fwk_lock();
 	__clk_unprepare(clk);
-	mutex_unlock(&prepare_lock);
+	clk_fwk_unlock();
 }
 EXPORT_SYMBOL_GPL(clk_unprepare);
 
@@ -455,10 +471,16 @@ int clk_prepare(struct clk *clk)
 {
 	int ret;
 
-	mutex_lock(&prepare_lock);
-	ret = __clk_prepare(clk);
-	mutex_unlock(&prepare_lock);
+	/* re-enter if call is from the same context */
+	if (clk_is_reentrant()) {
+		ret = __clk_prepare(clk);
+		goto out;
+	}
 
+	clk_fwk_lock();
+	ret = __clk_prepare(clk);
+	clk_fwk_unlock();
+out:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(clk_prepare);
@@ -496,8 +518,27 @@ void clk_disable(struct clk *clk)
 {
 	unsigned long flags;
 
+	/* must check both the global spinlock and the global mutex */
+	if (spin_is_locked(&enable_lock) || mutex_is_locked(&prepare_lock)) {
+		if ((void *) atomic_read(&context) == get_current()) {
+			__clk_disable(clk);
+			return;
+		}
+	}
+
+	/* hold the framework-wide lock, context == NULL */
 	spin_lock_irqsave(&enable_lock, flags);
+
+	/* set context for any reentrant calls */
+	atomic_set(&context, (int) get_current());
+
+	/* disable the clock(s) */
 	__clk_disable(clk);
+
+	/* clear the context */
+	atomic_set(&context, 0);
+
+	/* release the framework-wide lock, context == NULL */
 	spin_unlock_irqrestore(&enable_lock, flags);
 }
 EXPORT_SYMBOL_GPL(clk_disable);
@@ -549,10 +590,29 @@ int clk_enable(struct clk *clk)
 	unsigned long flags;
 	int ret;
 
-	spin_lock_irqsave(&enable_lock, flags);
-	ret = __clk_enable(clk);
-	spin_unlock_irqrestore(&enable_lock, flags);
+	/* this call re-enters if it is from the same context */
+	if (spin_is_locked(&enable_lock) || mutex_is_locked(&prepare_lock)) {
+		if ((void *) atomic_read(&context) == get_current()) {
+			ret = __clk_enable(clk);
+			goto out;
+		}
+	}
 
+	/* hold the framework-wide lock, context == NULL */
+	spin_lock_irqsave(&enable_lock, flags);
+
+	/* set context for any reentrant calls */
+	atomic_set(&context, (int) get_current());
+
+	/* enable the clock(s) */
+	ret = __clk_enable(clk);
+
+	/* clear the context */
+	atomic_set(&context, 0);
+
+	/* release the framework-wide lock, context == NULL */
+	spin_unlock_irqrestore(&enable_lock, flags);
+out:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(clk_enable);
@@ -568,10 +628,21 @@ unsigned long clk_get_rate(struct clk *clk)
 {
 	unsigned long rate;
 
-	mutex_lock(&prepare_lock);
-	rate = __clk_get_rate(clk);
-	mutex_unlock(&prepare_lock);
-
+	/*
++	 * FIXME - any locking here seems heavy weight
++	 * can clk->rate be replaced with an atomic_t?
++	 * same logic can likely be applied to prepare_count & enable_count
++	 */
+ 
+	if (clk_is_reentrant()) {
+		rate = __clk_get_rate(clk);
+		goto out;
+	}
+ 
+	clk_fwk_lock();
+ 	rate = __clk_get_rate(clk);
+	clk_fwk_unlock();
+ out;
 	return rate;
 }
 EXPORT_SYMBOL_GPL(clk_get_rate);
@@ -611,10 +682,17 @@ long clk_round_rate(struct clk *clk, unsigned long rate)
 {
 	unsigned long ret;
 
-	mutex_lock(&prepare_lock);
-	ret = __clk_round_rate(clk, rate);
-	mutex_unlock(&prepare_lock);
+	/* this call re-enters if it is from the same context */
+	if (clk_is_reentrant()) {
+		ret = __clk_round_rate(clk, rate);
+		goto out;
+	}
 
+	clk_fwk_lock();
+	ret = __clk_round_rate(clk, rate);
+	clk_fwk_unlock();
+
+out:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(clk_round_rate);
@@ -695,6 +773,30 @@ static void __clk_recalc_rates(struct clk *clk, unsigned long msg)
 
 	hlist_for_each_entry(child, tmp, &clk->children, child_node)
 		__clk_recalc_rates(child, msg);
+}
+
+unsigned long __clk_get_rate(struct clk *clk)
+{
+	unsigned long ret;
+
+	if (!clk) {
+		ret = 0;
+		goto out;
+	}
+
+	if (clk->flags & CLK_GET_RATE_NOCACHE)
+		__clk_recalc_rates(clk, 0);
+
+	ret = clk->rate;
+
+	if (clk->flags & CLK_IS_ROOT)
+		goto out;
+
+	if (!clk->parent)
+		ret = 0;
+
+ out:
+	return ret;
 }
 
 /**
@@ -854,6 +956,39 @@ static void clk_change_rate(struct clk *clk)
 		clk_change_rate(child);
 }
 
+int __clk_set_rate(struct clk *clk, unsigned long rate)
+{
+	int ret = 0;
+	struct clk *top, *fail_clk;
+
+	/* bail early if nothing to do */
+	if (rate == clk->rate)
+		return 0;
+
+	if ((clk->flags & CLK_SET_RATE_GATE) && clk->prepare_count) {
+		return -EBUSY;
+	}
+
+	/* calculate new rates and get the topmost changed clock */
+	top = clk_calc_new_rates(clk, rate);
+	if (!top)
+		return -EINVAL;
+
+	/* notify that we are about to change rates */
+	fail_clk = clk_propagate_rate_change(top, PRE_RATE_CHANGE);
+	if (fail_clk) {
+		pr_warn("%s: failed to set %s rate\n", __func__,
+				fail_clk->name);
+		clk_propagate_rate_change(top, ABORT_RATE_CHANGE);
+		return -EBUSY;
+	}
+
+	/* change the rates */
+	clk_change_rate(top);
+
+	return ret;
+}
+
 /**
  * clk_set_rate - specify a new rate for clk
  * @clk: the clk whose rate is being changed
@@ -896,39 +1031,17 @@ static void clk_change_rate(struct clk *clk)
  */
 int clk_set_rate(struct clk *clk, unsigned long rate)
 {
-	struct clk *top, *fail_clk;
 	int ret = 0;
 
-	/* prevent racing with updates to the clock topology */
-	mutex_lock(&prepare_lock);
-
-	/* bail early if nothing to do */
-	if (rate == clk->rate)
-		goto out;
-
-	/* calculate new rates and get the topmost changed clock */
-	top = clk_calc_new_rates(clk, rate);
-	if (!top) {
-		ret = -EINVAL;
+	if (clk_is_reentrant()) {
+		ret = __clk_set_rate(clk, rate);
 		goto out;
 	}
 
-	/* notify that we are about to change rates */
-	fail_clk = clk_propagate_rate_change(top, PRE_RATE_CHANGE);
-	if (fail_clk) {
-		pr_warn("%s: failed to set %s rate\n", __func__,
-				fail_clk->name);
-		clk_propagate_rate_change(top, ABORT_RATE_CHANGE);
-		ret = -EBUSY;
-		goto out;
-	}
+	clk_fwk_lock();
+	ret = __clk_set_rate(clk, rate);
+	clk_fwk_unlock();
 
-	/* change the rates */
-	clk_change_rate(top);
-
-	mutex_unlock(&prepare_lock);
-
-	return 0;
 out:
 	mutex_unlock(&prepare_lock);
 
@@ -946,10 +1059,16 @@ struct clk *clk_get_parent(struct clk *clk)
 {
 	struct clk *parent;
 
-	mutex_lock(&prepare_lock);
-	parent = __clk_get_parent(clk);
-	mutex_unlock(&prepare_lock);
+	if (clk_is_reentrant()) {
+		parent = __clk_get_parent(clk);
+		goto out;
+	}
 
+	clk_fwk_lock();
+	parent = __clk_get_parent(clk);
+	clk_fwk_unlock();
+
+out:
 	return parent;
 }
 EXPORT_SYMBOL_GPL(clk_get_parent);
@@ -1125,6 +1244,7 @@ out:
 int clk_set_parent(struct clk *clk, struct clk *parent)
 {
 	int ret = 0;
+	bool reenter;
 
 	if (!clk || !clk->ops)
 		return -EINVAL;
@@ -1132,8 +1252,10 @@ int clk_set_parent(struct clk *clk, struct clk *parent)
 	if (!clk->ops->set_parent)
 		return -ENOSYS;
 
-	/* prevent racing with updates to the clock topology */
-	mutex_lock(&prepare_lock);
+	reenter = clk_is_reentrant();
+
+	if (!reenter)
+		clk_fwk_lock();
 
 	if (clk->parent == parent)
 		goto out;
@@ -1162,7 +1284,8 @@ int clk_set_parent(struct clk *clk, struct clk *parent)
 	__clk_reparent(clk, parent);
 
 out:
-	mutex_unlock(&prepare_lock);
+	if (!reenter)
+		clk_fwk_unlock();
 
 	return ret;
 }
