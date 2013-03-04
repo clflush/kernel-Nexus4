@@ -46,6 +46,16 @@ bool freezing_slow_path(struct task_struct *p)
 }
 EXPORT_SYMBOL(freezing_slow_path);
 
+static void fake_signal_clear(struct task_struct *p)
+{
+ unsigned long flags;
+
+ if (lock_task_sighand(p, &flags)) {
+     recalc_sigpending();
+     unlock_task_sighand(p, &flags);
+ }
+}
+
 /* Refrigerator is place where frozen processes are stored :-). */
 bool __refrigerator(bool check_kthr_stop)
 {
@@ -73,6 +83,10 @@ bool __refrigerator(bool check_kthr_stop)
 	}
 
 	pr_debug("%s left refrigerator\n", current->comm);
+
+	if (!(current->flags & PF_KTHREAD))
+     		if (test_tsk_thread_flag(current, TIF_SIGPENDING))
+         		fake_signal_clear(current);
 
 	/*
 	 * Restore saved task state before returning.  The mb'd version

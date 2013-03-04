@@ -1,0 +1,12 @@
+diff a/kernel/freezer.c b/kernel/freezer.c	(rejected hunks)
+@@ -74,6 +84,10 @@ bool __refrigerator(bool check_kthr_stop)
+
+  pr_debug("%s left refrigerator\n", current->comm);
+
++ if (!(current->flags & PF_KTHREAD))
++     if (test_tsk_thread_flag(current, TIF_SIGPENDING))
++         fake_signal_clear(current);
++
+  /*
+  * Restore saved task state before returning.  The mb'd version
+  * needs to be used; otherwise, it might silently break
