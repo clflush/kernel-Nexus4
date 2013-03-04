@@ -39,8 +39,8 @@
 #define DEFAULT_THROTTLE_TEMP		70
 #define MAX_THROTTLE_TEMP			80
 #define COOL_TEMP					45
-#define COOL_TEMP_OFFSET_MS			210
-#define HOT_TEMP_OFFSET_MS			280
+#define COOL_TEMP_OFFSET_MS			270
+#define HOT_TEMP_OFFSET_MS			230
 #define DEFAULT_MIN_FREQ_INDEX		7
 
 static int enabled;
