@@ -961,7 +961,6 @@ void kgsl_pwrctrl_wake(struct kgsl_device *device)
 
 	kgsl_mmu_disable_clk_on_ts(&device->mmu, 0, false);
 
-	return 0;
 }
 EXPORT_SYMBOL(kgsl_pwrctrl_wake);
 
