@@ -488,7 +488,6 @@ static int __qseecom_process_incomplete_cmd(struct qseecom_dev_handle *data,
 					struct qseecom_command_scm_resp *resp)
 {
 	int ret = 0;
-	int rc = 0;
 	uint32_t lstnr;
 	unsigned long flags;
 	struct qseecom_client_listener_data_irsp send_data_rsp;
@@ -527,12 +526,8 @@ static int __qseecom_process_incomplete_cmd(struct qseecom_dev_handle *data,
 		if (data->abort) {
 			pr_err("Aborting listener service %d\n",
 				data->listener.id);
-			rc = -ENODEV;
-			send_data_rsp.status  = QSEOS_RESULT_FAILURE;
-		} else {
-			send_data_rsp.status  = QSEOS_RESULT_SUCCESS;
+			return -ENODEV;
 		}
-
 		qseecom.send_resp_flag = 0;
 		send_data_rsp.qsee_cmd_id = QSEOS_LISTENER_DATA_RSP_COMMAND;
 		send_data_rsp.listener_id  = lstnr ;
@@ -551,9 +546,6 @@ static int __qseecom_process_incomplete_cmd(struct qseecom_dev_handle *data,
 			return -EINVAL;
 		}
 	}
-	if (rc)
-		return rc;
-
 	return ret;
 }
 
