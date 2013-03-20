@@ -100,8 +100,6 @@ static void do_dbs_timer(struct work_struct *work);
 static int cpufreq_governor_dbs(struct cpufreq_policy *policy,
 				unsigned int event);
 
-extern void hotplug_boostpulse(void);
-
 #ifndef CONFIG_CPU_FREQ_DEFAULT_GOV_INTELLIDEMAND
 static
 #endif
@@ -1081,7 +1079,6 @@ static void dbs_check_cpu(struct cpu_dbs_info_s *this_dbs_info)
 			max_load_freq = load_freq;
 	}
 
-	hotplug_boostpulse();
 
 	for_each_online_cpu(j) {
 		struct cpu_dbs_info_s *j_dbs_info;
