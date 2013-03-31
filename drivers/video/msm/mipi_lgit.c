@@ -35,7 +35,7 @@ static int skip_init;
 #ifdef CONFIG_GAMMA_CONTROL
 static DEFINE_MUTEX(color_lock);
 struct dsi_cmd_desc new_color_vals[33];
-int get_whites(void);
+int get_whites(void);f
 int get_mids(void);
 int get_blacks(void);
 int get_contrast(void);
@@ -681,6 +681,7 @@ static int mipi_lgit_lcd_probe(struct platform_device *pdev)
 	msm_fb_add_device(pdev);
 
 	register_syscore_ops(&panel_syscore_ops);
+<<<<<<< HEAD
 	
 	/* faux123 gamma control */
 	rc = device_create_file(&pdev->dev, &dev_attr_kgamma_r);
