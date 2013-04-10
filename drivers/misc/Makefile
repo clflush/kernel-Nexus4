@@ -76,5 +76,6 @@ obj-y += tspdrv/
 obj-$(CONFIG_BU52031NVX) += pm8xxx-cradle.o
 obj-$(CONFIG_SLIMPORT_ANX7808)	+= slimport_anx7808/
 obj-y += gamma_control.o
+obj-y += mako_hotplug_control.o
 obj-$(CONFIG_FSYNC_CONTROL)  += fsync_control.o
 
